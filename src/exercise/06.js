@@ -3,11 +3,9 @@
 
 import * as React from 'react'
 import {Switch} from '../switch'
+import warning from 'warning'
 
-const callAll =
-  (...fns) =>
-  (...args) =>
-    fns.forEach(fn => fn?.(...args))
+const callAll = (...fns) => (...args) => fns.forEach(fn => fn?.(...args))
 
 const actionTypes = {
   toggle: 'toggle',
@@ -32,23 +30,45 @@ function useToggle({
   initialOn = false,
   reducer = toggleReducer,
   // 🐨 add an `onChange` prop.
+  onChange,
   // 🐨 add an `on` option here
+  on: controlledOn,
+  readOnly = false,
   // 💰 you can alias it to `controlledOn` to avoid "variable shadowing."
 } = {}) {
   const {current: initialState} = React.useRef({on: initialOn})
   const [state, dispatch] = React.useReducer(reducer, initialState)
   // 🐨 determine whether on is controlled and assign that to `onIsControlled`
   // 💰 `controlledOn != null`
-
+  const onIsControlled = controlledOn != null
   // 🐨 Replace the next line with `const on = ...` which should be `controlledOn` if
   // `onIsControlled`, otherwise, it should be `state.on`.
-  const {on} = state
+  const on = onIsControlled ? controlledOn : state.on
+
+  const hasOnChange = Boolean(onChange)
+  React.useEffect(() => {
+    warning(
+      !(!hasOnChange && onIsControlled && !readOnly),
+      `Warning: Failed prop type: You provided a \`value\` prop to a form field without an \`onChange\` handler. This will render a read-only field. If the field should be mutable use \`defaultValue\`. Otherwise, set either \`onChange\` or \`readOnly\`.`
+    )
+    // if (!hasOnChange && onIsControlled && !readOnly) {
+    //   console.error(`
+    //   Warning: Failed prop type: You provided a \`value\` prop to a form field without an \`onChange\` handler. This will render a read-only field. If the field should be mutable use \`defaultValue\`. Otherwise, set either \`onChange\` or \`readOnly\`.
+    //   `)
+    // }
+  }, [hasOnChange, onIsControlled, readOnly])
 
   // We want to call `onChange` any time we need to make a state change, but we
   // only want to call `dispatch` if `!onIsControlled` (otherwise we could get
   // unnecessary renders).
   // 🐨 To simplify things a bit, let's make a `dispatchWithOnChange` function
   // right here. This will:
+  function dispatchWithOnChange(action) {
+    if(!onIsControlled) {
+      dispatch(action)
+    }
+    onChange && onChange(reducer({...state, on}, action), action)
+  }
   // 1. accept an action
   // 2. if onIsControlled is false, call dispatch with that action
   // 3. Then call `onChange` with our "suggested changes" and the action.
@@ -69,8 +89,8 @@ function useToggle({
   // so keep that in mind when you call it! How could you avoid calling it if it's not passed?
 
   // make these call `dispatchWithOnChange` instead
-  const toggle = () => dispatch({type: actionTypes.toggle})
-  const reset = () => dispatch({type: actionTypes.reset, initialState})
+  const toggle = () => dispatchWithOnChange({type: actionTypes.toggle})
+  const reset = () => dispatchWithOnChange({type: actionTypes.reset, initialState})
 
   function getTogglerProps({onClick, ...props} = {}) {
     return {
@@ -96,13 +116,8 @@ function useToggle({
   }
 }
 
-function Toggle({on: controlledOn, onChange, initialOn, reducer}) {
-  const {on, getTogglerProps} = useToggle({
-    on: controlledOn,
-    onChange,
-    initialOn,
-    reducer,
-  })
+function Toggle({on: controlledOn, onChange}) {
+  const {on, getTogglerProps} = useToggle({on: controlledOn, onChange})
   const props = getTogglerProps({on})
   return <Switch {...props} />
 }
